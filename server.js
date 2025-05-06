@@ -3,6 +3,7 @@ const { initializeApp } = require('firebase/app');
 const { getFirestore, collection, getDocs, query, where, updateDoc } = require('firebase/firestore');
 const { ethers } = require('ethers');
 const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
 const app = express();
@@ -65,29 +66,43 @@ function createAndSaveWallet() {
     const privateKey = wallet.privateKey;
     const address = wallet.address;
 
-    const { iv, encryptedKey } = encryptKey(privateKey, process.env.PASSWORD || 'YOUR_PASSWORD');
-    fs.writeFileSync('/opt/render/wallet/wallet.json', JSON.stringify({ address, iv, encryptedKey }));
+    const password = process.env.WALLET_PASSWORD || 'YOUR_PASSWORD'; // Use env var
+    const { iv, encryptedKey } = encryptKey(privateKey, password);
+
+    // Dynamic path for wallet file
+    const walletDir = process.env.WALLET_PATH || path.join(__dirname, 'wallet');
+    const walletPath = path.join(walletDir, 'wallet.json');
+
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(walletDir)) {
+        fs.mkdirSync(walletDir, { recursive: true });
+    }
+
+    fs.writeFileSync(walletPath, JSON.stringify({ address, iv, encryptedKey }, null, 2));
 
     console.log(`Ví mới được tạo: ${address}`);
-    console.log('Đã lưu ví vào /opt/render/wallet/wallet.json. Sao lưu file này an toàn!');
+    console.log(`Đã lưu ví vào ${walletPath}. Sao lưu file này an toàn!`);
 
     return wallet;
 }
 
 // Đọc ví từ file
 function loadWallet(password) {
-    const data = JSON.parse(fs.readFileSync('/opt/render/wallet/wallet.json', 'utf8'));
+    const walletDir = process.env.WALLET_PATH || path.join(__dirname, 'wallet');
+    const walletPath = path.join(walletDir, 'wallet.json');
+    const data = JSON.parse(fs.readFileSync(walletPath, 'utf8'));
     const decryptedKey = decryptKey(data.encryptedKey, data.iv, password);
     return new ethers.Wallet(decryptedKey, provider);
 }
 
 // Tạo hoặc tải ví
 let wallet;
-const walletPath = '/opt/render/wallet/wallet.json';
+const walletDir = process.env.WALLET_PATH || path.join(__dirname, 'wallet');
+const walletPath = path.join(walletDir, 'wallet.json');
 if (!fs.existsSync(walletPath)) {
     wallet = createAndSaveWallet();
 } else {
-    wallet = loadWallet(process.env.PASSWORD || 'YOUR_PASSWORD');
+    wallet = loadWallet(process.env.WALLET_PASSWORD || 'YOUR_PASSWORD');
 }
 
 const contract = new ethers.Contract(contractAddress, contractAbi, wallet);
@@ -106,7 +121,7 @@ async function processPurchases() {
             console.log(`Xử lý giao dịch ${txHash} cho ${userAddress}`);
 
             // Gọi contract để ghi nhận và gửi ETH Sepolia
-            const tx = await contract.recordPurchase(userAddress, ethers.utils.parseEther(sethAmount.toString()));
+            const tx = await contract.recordPurchase(userAddress, ethers.parseEther(sethAmount.toString()));
             await tx.wait();
 
             console.log(`Giao dịch ${txHash} xử lý thành công. Tx: ${tx.hash}`);
