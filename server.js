@@ -1,11 +1,12 @@
 const express = require('express');
+const compression = require('compression');
+const path = require('path');
 const { ethers } = require('ethers');
 
 const app = express();
-const port = process.env.PORT || 3000;
-
+app.use(compression());
 app.use(express.json());
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Middleware để đảm bảo luôn trả về JSON
 app.use((req, res, next) => {
@@ -13,8 +14,9 @@ app.use((req, res, next) => {
     next();
 });
 
+// Route chính trả về giao diện starry
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 const createWallet = () => {
@@ -88,6 +90,8 @@ app.use((req, res) => {
     res.status(404).json({ success: false, error: 'Route not found' });
 });
 
+// Mở cổng từ PORT environment variable (Render yêu cầu port 10000)
+const port = process.env.PORT || 10000;
 app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+    console.log(`Server running on port ${port}`);
 });
